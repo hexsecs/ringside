@@ -28,6 +28,7 @@ update_event = asyncio.Event()
 outbound_queue: asyncio.Queue[tuple[int, int, int]] = asyncio.Queue()
 _midi_out = None
 LED_ECHO = os.getenv("LED_ECHO", "1") not in ("0", "false", "False", "no")
+HEARTBEAT_HZ = float(os.getenv("HEARTBEAT_HZ", "10"))  # reduce spam vs 60 Hz
 
 
 async def broadcast(payload: dict):
@@ -100,7 +101,7 @@ async def _midi_watcher():
                     send_cc(_midi_out, control, value, channel)
             except asyncio.QueueEmpty:
                 pass
-            await asyncio.sleep(1 / 60)
+            await asyncio.sleep(max(0.05, 1.0 / HEARTBEAT_HZ))
             await broadcast({"type": "heartbeat", "state": state.snapshot().model_dump()})
     finally:
         if inp is not None:

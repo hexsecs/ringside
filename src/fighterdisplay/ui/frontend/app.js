@@ -9,6 +9,17 @@ let midiIn = null;
 let midiOut = null;
 let echoLED = true; // echo CC back to Twister to drive LED rings
 
+// WebSocket state with auto-reconnect
+let ws = null;
+let reconnectDelay = 500; // ms
+const reconnectMax = 10000; // ms
+let keepaliveId = null;
+
+function setStatus(text, cls = '') {
+  statusEl.textContent = text;
+  statusEl.className = cls;
+}
+
 function render(state) {
   const bank = state.current_bank || 1;
   // Update active bank button
@@ -47,16 +58,35 @@ async function fetchPorts() {
 
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(`${proto}://${location.host}/ws`);
-  ws.onopen = () => (statusEl.textContent = 'Connected');
-  ws.onclose = () => (statusEl.textContent = 'Disconnected');
-  ws.onerror = () => (statusEl.textContent = 'Error');
+  setStatus('Connecting…', 'connecting');
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+  ws.onopen = async () => {
+    setStatus('Connected', 'connected');
+    reconnectDelay = 500;
+    // Prime UI with a fresh state fetch in case we missed updates
+    try {
+      const res = await fetch('/api/state');
+      render(await res.json());
+    } catch {}
+    // Keepalive pings from browser side
+    if (keepaliveId) clearInterval(keepaliveId);
+    keepaliveId = setInterval(() => { try { ws && ws.send('ping'); } catch {} }, 15000);
+  };
+  ws.onclose = () => {
+    setStatus(`Disconnected – retrying in ${Math.round(reconnectDelay/1000)}s`, 'disconnected');
+    if (keepaliveId) { clearInterval(keepaliveId); keepaliveId = null; }
+    setTimeout(() => {
+      reconnectDelay = Math.min(reconnectDelay * 2, reconnectMax);
+      connect();
+    }, reconnectDelay);
+  };
+  ws.onerror = () => {
+    setStatus('Connection error', 'error');
+  };
   ws.onmessage = (ev) => {
     try {
       const msg = JSON.parse(ev.data);
-      if (msg.state) {
-        render(msg.state);
-      }
+      if (msg.state) render(msg.state);
     } catch {}
   };
 }

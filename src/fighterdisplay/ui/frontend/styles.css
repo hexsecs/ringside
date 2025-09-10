@@ -5,6 +5,9 @@ header { display: flex; align-items: center; justify-content: space-between; pad
 .toolbar { display: flex; gap: 16px; align-items: center; }
 .bank button { margin-left: 4px; }
 .bank button.active { background: #37f; color: white; border-color: #37f; }
+#status.connecting { color: #d79a00; }
+#status.connected { color: #2aa745; }
+#status.disconnected, #status.error { color: #d04a4a; }
 h1 { margin: 0; font-size: 20px; }
 main { display: grid; gap: 24px; grid-template-columns: 2fr 1fr; align-items: start; }
 .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
