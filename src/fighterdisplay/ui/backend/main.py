@@ -162,7 +162,9 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         task.cancel()
-        with contextlib.suppress(Exception):
+        # On Python 3.11+, asyncio.CancelledError derives from BaseException.
+        # Suppress it here to allow clean shutdown without ERROR logs.
+        with contextlib.suppress(asyncio.CancelledError):
             await task
 
 
