@@ -14,6 +14,36 @@ let ccMap = {}; // { bank: { encoder: cc } }
 let latestState = null;
 let latestMapping = null;
 
+// Click/double-click coordination
+let clickTimer = null;
+let isEditing = false;
+
+function openAssignDialog(enc) {
+  if (isEditing) return;
+  isEditing = true;
+  try {
+    const s = latestState || {};
+    const bank = (s && s.current_bank) || 1;
+    const prev = (ccMap[bank] && ccMap[bank][enc] != null) ? ccMap[bank][enc] : '';
+    const ccStr = window.prompt(`Assign CC for Bank ${bank} Enc ${enc}`, String(prev));
+    if (ccStr == null) return; // cancelled
+    const cc = parseInt(ccStr, 10);
+    if (!Number.isFinite(cc) || cc < 0 || cc > 127) return; // invalid
+    fetch('/api/mapping', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bank, encoder: enc, cc })
+    }).then((r) => r.json()).then((out) => {
+      if (out && out.mapping) {
+        latestMapping = out.mapping;
+        render(latestState || {}, latestMapping);
+      }
+    }).catch(() => {});
+  } finally {
+    isEditing = false;
+  }
+}
+
 // WebSocket state with auto-reconnect
 let ws = null;
 let reconnectDelay = 500; // ms
@@ -195,29 +225,28 @@ async function initWebMIDI() {
 setTimeout(initWebMIDI, 200);
 
 // ----- Simple CC assignment via clicking label -----
-encodersEl.addEventListener('click', async (ev) => {
+encodersEl.addEventListener('click', (ev) => {
   const label = ev.target.closest('.label');
   if (!label) return;
   ev.preventDefault();
   ev.stopPropagation();
   const enc = parseInt(label.dataset.enc, 10);
   if (!enc) return;
-  // Use cached state to avoid extra network calls and potential stalls
-  const s = latestState || {};
-  const bank = (s && s.current_bank) || 1;
-  const prev = (ccMap[bank] && ccMap[bank][enc] != null) ? ccMap[bank][enc] : '';
-  // Prompt can be cancelled; handle gracefully and do nothing
-  const ccStr = window.prompt(`Assign CC for Bank ${bank} Enc ${enc}`, String(prev));
-  if (ccStr == null) return;
-  // Accept only integers 0..127
-  const cc = parseInt(ccStr, 10);
-  if (!Number.isFinite(cc) || cc < 0 || cc > 127) return;
-  try {
-    const res = await fetch('/api/mapping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bank, encoder: enc, cc }) });
-    const out = await res.json();
-    if (out && out.mapping) {
-      latestMapping = out.mapping;
-      render(latestState || {}, latestMapping);
-    }
-  } catch {}
+  // Defer single-click action briefly to allow dblclick to override
+  if (clickTimer) clearTimeout(clickTimer);
+  clickTimer = setTimeout(() => {
+    clickTimer = null;
+    openAssignDialog(enc);
+  }, 250);
+});
+
+encodersEl.addEventListener('dblclick', (ev) => {
+  const label = ev.target.closest('.label');
+  if (!label) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  const enc = parseInt(label.dataset.enc, 10);
+  if (!enc) return;
+  if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+  openAssignDialog(enc);
 });
