@@ -2,11 +2,7 @@
   "banks": {
     "1": {
       "encoders": {
-        "1": {
-          "id": 1,
-          "label": "",
-          "cc": 14
-        }
+        "1": { "id": 1, "label": "Cutoff", "cc": 14 }
       }
     }
   }
