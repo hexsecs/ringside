@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict, Any
 
 from .state import StateStore
+from .config import labels_from_config
 
 
 def load_preset(path: str | Path) -> Dict[int, Dict[int, str]]:
@@ -15,21 +16,9 @@ def load_preset(path: str | Path) -> Dict[int, Dict[int, str]]:
         data: Dict[str, Any] = json.loads(p.read_text())
     except Exception:
         return {}
-    labels: Dict[int, Dict[int, str]] = {}
-    for bank_str, cfg in data.get("banks", {}).items():
-        try:
-            bank = int(bank_str)
-        except Exception:
-            continue
-        encs = {}
-        for enc_str, label in (cfg or {}).get("encoders", {}).items():
-            try:
-                encs[int(enc_str)] = str(label)
-            except Exception:
-                pass
-        if encs:
-            labels[bank] = encs
-    return labels
+    # Support both legacy {encoders:{"1":"Label"}} and new combined format
+    # where encoders may be objects with {id,label,cc}
+    return labels_from_config(data)
 
 
 def apply_labels(store: StateStore, labels_by_bank: Dict[int, Dict[int, str]]) -> None:

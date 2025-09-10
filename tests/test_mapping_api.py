@@ -3,8 +3,8 @@ from fastapi.testclient import TestClient
 
 
 def test_mapping_roundtrip_and_state_includes_mapping(tmp_path, monkeypatch):
-    # Use a temp path for CC map persistence
-    monkeypatch.setenv('CC_MAP_PATH', str(tmp_path / 'cc_map.json'))
+    # Use a temp path for unified config persistence
+    monkeypatch.setenv('CONFIG_PATH', str(tmp_path / 'config.json'))
     client = TestClient(app)
     # Set mapping bank1 enc1 -> cc14
     r = client.post('/api/mapping', json={'bank': 1, 'encoder': 1, 'cc': 14})
@@ -22,4 +22,3 @@ def test_mapping_roundtrip_and_state_includes_mapping(tmp_path, monkeypatch):
     assert b1
     e1 = b1.get('1') or b1.get(1)
     assert int(e1) == 14
-

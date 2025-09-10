@@ -12,7 +12,14 @@ from fastapi.staticfiles import StaticFiles
 import os
 from fighterdisplay.core.state import StateStore
 from fighterdisplay.core.presets import load_preset, apply_labels
-from fighterdisplay.core.mapping import load_cc_map, save_cc_map, invert_cc_map, set_cc
+from fighterdisplay.core.config import (
+    load_config,
+    save_config,
+    labels_from_config,
+    cc_map_from_config,
+    invert_cc_map,
+    set_encoder_cc,
+)
 from fighterdisplay.midi.device import (
     list_input_ports,
     list_output_ports,
@@ -30,7 +37,10 @@ outbound_queue: asyncio.Queue[tuple[int, int, int]] = asyncio.Queue()
 _midi_out = None
 LED_ECHO = os.getenv("LED_ECHO", "1") not in ("0", "false", "False", "no")
 HEARTBEAT_HZ = float(os.getenv("HEARTBEAT_HZ", "10"))  # reduce spam vs 60 Hz
-CC_MAP_PATH = os.getenv("CC_MAP_PATH", "assets/presets/cc_map.json")
+def _config_path() -> str:
+    return os.getenv("CONFIG_PATH", "assets/presets/default.json")
+
+app_config = {"banks": {}}
 cc_map: dict[int, dict[int, int]] = {}
 cc_reverse: dict[int, tuple[int, int]] = {}
 
@@ -132,21 +142,18 @@ async def _midi_watcher():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Load labels from preset if present
+    # Load unified config (labels + CC mapping)
+    global app_config, cc_map, cc_reverse
     try:
-        labels = load_preset("assets/presets/default.json")
+        app_config = load_config(_config_path())
+        labels = labels_from_config(app_config)
         if labels:
             apply_labels(state, labels)
-    except Exception:
-        pass
-    # Load CC mapping
-    global cc_map, cc_reverse
-    try:
-        cc_map = load_cc_map(CC_MAP_PATH)
+        cc_map = cc_map_from_config(app_config)
         cc_reverse = invert_cc_map(cc_map)
     except Exception:
+        app_config = {"banks": {}}
         cc_map, cc_reverse = {}, {}
-
     task = asyncio.create_task(_midi_watcher())
     try:
         yield
@@ -203,7 +210,7 @@ def api_get_mapping():
 
 @app.post("/api/mapping")
 async def api_set_mapping(payload: dict = Body(...)):
-    global cc_map, cc_reverse
+    global app_config, cc_map, cc_reverse
     try:
         bank = int(payload.get("bank"))
         encoder = int(payload.get("encoder"))
@@ -212,9 +219,10 @@ async def api_set_mapping(payload: dict = Body(...)):
         return {"ok": False, "error": "invalid payload"}
     if not (1 <= bank <= 4 and 1 <= encoder <= 16 and 0 <= cc <= 127):
         return {"ok": False, "error": "out of range"}
-    cc_map = set_cc(dict(cc_map), bank, encoder, cc)
+    app_config = set_encoder_cc(dict(app_config), bank, encoder, cc)
+    cc_map = cc_map_from_config(app_config)
     cc_reverse = invert_cc_map(cc_map)
-    save_cc_map(CC_MAP_PATH, cc_map)
+    save_config(_config_path(), app_config)
     await broadcast({"type": "mapping", "mapping": cc_map, "state": state.snapshot().model_dump()})
     return {"ok": True, "mapping": cc_map}
 
