@@ -8,7 +8,7 @@ HOST?=127.0.0.1
 PORT?=8000
 APP_DIR?=src
 
-.PHONY: setup setup-hw dev dev-noreload test list-ports format lint clean
+.PHONY: setup setup-hw dev dev-noreload dev-stop test list-ports format lint clean
 
 setup:
 	python3 -m venv $(VENV)
@@ -24,6 +24,11 @@ dev:
 
 dev-noreload:
 	$(UVICORN) fighterdisplay.ui.backend.main:app --host $(HOST) --port $(PORT) --app-dir $(APP_DIR)
+
+dev-stop:
+	@# Stop a dev server by port if running
+	@PID=$$(lsof -tiTCP:$(PORT) -sTCP:LISTEN 2>/dev/null || true); \
+	if [ -n "$$PID" ]; then echo "Killing PID $$PID on port $(PORT)"; kill $$PID || true; else echo "No process on port $(PORT)"; fi
 
 test:
 	PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 MIDO_BACKEND=mido.backends.rtmidi PYTHONPATH=$(APP_DIR) $(VENV)/bin/pytest -v

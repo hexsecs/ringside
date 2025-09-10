@@ -53,6 +53,9 @@ async def broadcast(payload: dict):
         try:
             await ws.send_json(payload)
             living.add(ws)
+        except asyncio.CancelledError:
+            # Propagate cancellation so shutdown succeeds
+            raise
         except Exception:
             # Drop broken connection
             pass
@@ -237,12 +240,16 @@ async def ws_endpoint(ws: WebSocket):
         # Drain incoming messages to keep the connection healthy. All updates are
         # pushed via broadcast() (heartbeat + state changes).
         while True:
-            with contextlib.suppress(Exception):
+            try:
                 await ws.receive_text()
-    except WebSocketDisconnect:
-        pass
-    except Exception:
-        pass
+            except WebSocketDisconnect:
+                break
+            except asyncio.CancelledError:
+                # Shutdown signal; exit loop
+                break
+            except Exception:
+                # Ignore malformed client messages and continue
+                pass
     finally:
         connections.discard(ws)
 
