@@ -13,3 +13,6 @@ venv/
 # OS
 .DS_Store
 
+# Local dev artifacts
+.uvicorn.log
+.uvicorn.pid
