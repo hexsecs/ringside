@@ -35,9 +35,10 @@ function render(state) {
     .map((k) => {
       const e = encoders[k] || { label: '', value: 0 };
       const pct = Math.round((e.value || 0) / 127 * 100);
+      const cc = k - 1; // Twister sends CC 0..15 per bank (channel selects bank)
       return `
         <div class="cell">
-          <div class="label">${e.label || 'Enc ' + k}</div>
+          <div class="label">${(e.label || ('Enc ' + k)) + ' (CC ' + cc + ')'}</div>
           <div class="bar"><div class="fill" style="width:${pct}%"></div></div>
           <div class="value">${e.value || 0}</div>
         </div>
