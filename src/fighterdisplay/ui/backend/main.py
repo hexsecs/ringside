@@ -45,26 +45,37 @@ async def broadcast(payload: dict):
     connections.update(living)
 
 
-def _midi_callback(msg: dict):
-    # Very basic mapping: CC value updates encoder value on current bank.
+def process_midi_msg(msg: dict) -> None:
+    """Process a MIDI-like message dict and update state + LED echo queue.
+
+    Expected keys: 'type' (optional), 'control', 'value', 'channel' (0..15).
+    """
     control = msg.get("control")
     value = msg.get("value")
-    channel = int(msg.get("channel", 0))
-    if control is not None and value is not None:
-        # Derive bank from channel (1..4), fallback to current
-        derived_bank = max(1, min(4, channel + 1))
-        current = state.snapshot().current_bank
-        bank = derived_bank or current
-        enc_index = (int(control) % 16) + 1
-        snap = state.update_encoder(bank, enc_index, int(value))
-        if LED_ECHO:
-            try:
-                outbound_queue.put_nowait((int(control), int(value), channel))
-            except Exception:
-                pass
-        # Notify async loop
-        loop = asyncio.get_event_loop()
-        loop.call_soon_threadsafe(update_event.set)
+    try:
+        channel = int(msg.get("channel", 0))
+    except Exception:
+        channel = 0
+    if control is None or value is None:
+        return
+    # Derive bank from channel (1..4), fallback to current bank
+    derived_bank = max(1, min(4, channel + 1))
+    current = state.snapshot().current_bank
+    bank = derived_bank or current
+    enc_index = (int(control) % 16) + 1
+    state.update_encoder(bank, enc_index, int(value))
+    if LED_ECHO:
+        try:
+            outbound_queue.put_nowait((int(control), int(value), channel))
+        except Exception:
+            pass
+    # Notify async loop
+    loop = asyncio.get_event_loop()
+    loop.call_soon_threadsafe(update_event.set)
+
+
+def _midi_callback(msg: dict):
+    process_midi_msg(msg)
 
 
 async def _midi_watcher():
@@ -149,6 +160,16 @@ async def api_set_bank(payload: dict = Body(...)):
     bank = int(payload.get("bank", 1))
     snap = state.set_bank(bank)
     await broadcast({"type": "bank", "state": snap.model_dump()})
+    return {"ok": True}
+
+
+@app.post("/api/midi")
+async def api_midi(payload: dict = Body(...)):
+    # Accept a MIDI-like dict from Web MIDI frontend and process it
+    try:
+        process_midi_msg(payload)
+    except Exception:
+        pass
     return {"ok": True}
 
 
