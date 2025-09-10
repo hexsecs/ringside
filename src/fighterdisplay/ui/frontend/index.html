@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FighterDisplay</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>FighterDisplay</h1>
+      <div class="toolbar">
+        <div id="status">Connecting…</div>
+        <div class="bank">Bank: <button data-bank="1">1</button><button data-bank="2">2</button><button data-bank="3">3</button><button data-bank="4">4</button></div>
+      </div>
+    </header>
+    <main>
+      <section>
+        <h2>Encoders</h2>
+        <div id="encoders" class="grid"></div>
+      </section>
+      <section>
+        <h2>Ports</h2>
+        <pre id="ports">(loading)</pre>
+      </section>
+    </main>
+    <script src="/app.js" type="module"></script>
+  </body>
+  </html>

@@ -1,0 +1,14 @@
+{
+  "banks": {
+    "1": { "encoders": {
+      "1": "Cutoff", "2": "Resonance", "3": "Env Amt", "4": "Decay",
+      "5": "LFO Rate", "6": "LFO Amt", "7": "Attack", "8": "Release",
+      "9": "Drive", "10": "Noise", "11": "Chorus", "12": "Delay",
+      "13": "Reverb", "14": "Pan", "15": "Tune", "16": "Level"
+    } },
+    "2": { "encoders": {} },
+    "3": { "encoders": {} },
+    "4": { "encoders": {} }
+  }
+}
+

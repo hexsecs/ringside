@@ -1,0 +1,17 @@
+:root { color-scheme: dark light; }
+* { box-sizing: border-box; }
+body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 0 16px 32px; }
+header { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; gap: 12px; }
+.toolbar { display: flex; gap: 16px; align-items: center; }
+.bank button { margin-left: 4px; }
+.bank button.active { background: #37f; color: white; border-color: #37f; }
+h1 { margin: 0; font-size: 20px; }
+main { display: grid; gap: 24px; grid-template-columns: 2fr 1fr; align-items: start; }
+.grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.cell { padding: 8px; border: 1px solid #4443; border-radius: 8px; background: #0001; }
+.label { font-size: 12px; opacity: 0.8; }
+.bar { height: 8px; background: #ffffff1a; border-radius: 4px; overflow: hidden; margin: 6px 0; }
+.fill { height: 100%; background: linear-gradient(90deg, #37f 0%, #3fa 100%); }
+.value { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; opacity: 0.9; }
+
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
