@@ -10,6 +10,10 @@ let midiOut = null;
 let echoLED = true; // echo CC back to Twister to drive LED rings
 let ccMap = {}; // { bank: { encoder: cc } }
 
+// Cache last known state/mapping for quick local reads
+let latestState = null;
+let latestMapping = null;
+
 // WebSocket state with auto-reconnect
 let ws = null;
 let reconnectDelay = 500; // ms
@@ -22,6 +26,8 @@ function setStatus(text, cls = '') {
 }
 
 function render(state, mapping = null) {
+  latestState = state || latestState || {};
+  if (mapping) latestMapping = mapping;
   const bank = state.current_bank || 1;
   if (mapping) {
     // Normalize mapping: either {banks:{}} or flat {bank:{encoder:cc}}
@@ -192,22 +198,26 @@ setTimeout(initWebMIDI, 200);
 encodersEl.addEventListener('click', async (ev) => {
   const label = ev.target.closest('.label');
   if (!label) return;
+  ev.preventDefault();
+  ev.stopPropagation();
   const enc = parseInt(label.dataset.enc, 10);
   if (!enc) return;
-  let js = null;
-  try { js = await fetch('/api/state').then(r => r.json()); } catch {}
-  const bank = (js && js.state && js.state.current_bank) || (js && js.current_bank) || 1;
+  // Use cached state to avoid extra network calls and potential stalls
+  const s = latestState || {};
+  const bank = (s && s.current_bank) || 1;
   const prev = (ccMap[bank] && ccMap[bank][enc] != null) ? ccMap[bank][enc] : '';
-  const ccStr = prompt(`Assign CC for Bank ${bank} Enc ${enc}`, String(prev));
+  // Prompt can be cancelled; handle gracefully and do nothing
+  const ccStr = window.prompt(`Assign CC for Bank ${bank} Enc ${enc}`, String(prev));
   if (ccStr == null) return;
+  // Accept only integers 0..127
   const cc = parseInt(ccStr, 10);
-  if (!(cc >= 0 && cc <= 127)) return;
+  if (!Number.isFinite(cc) || cc < 0 || cc > 127) return;
   try {
     const res = await fetch('/api/mapping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bank, encoder: enc, cc }) });
     const out = await res.json();
-    const mapping = out.mapping;
-    if (mapping) {
-      render((js && js.state) || js || {}, mapping);
+    if (out && out.mapping) {
+      latestMapping = out.mapping;
+      render(latestState || {}, latestMapping);
     }
   } catch {}
 });

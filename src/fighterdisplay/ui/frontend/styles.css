@@ -13,6 +13,7 @@ main { display: grid; gap: 24px; grid-template-columns: 2fr 1fr; align-items: st
 .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .cell { padding: 8px; border: 1px solid #4443; border-radius: 8px; background: #0001; }
 .label { font-size: 12px; opacity: 0.8; }
+.label { cursor: pointer; }
 .bar { height: 8px; background: #ffffff1a; border-radius: 4px; overflow: hidden; margin: 6px 0; }
 .fill { height: 100%; background: linear-gradient(90deg, #37f 0%, #3fa 100%); }
 .value { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; opacity: 0.9; }
