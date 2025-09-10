@@ -11,7 +11,8 @@ header { display: flex; align-items: center; justify-content: space-between; pad
 h1 { margin: 0; font-size: 20px; }
 main { display: grid; gap: 24px; grid-template-columns: 2fr 1fr; align-items: start; }
 .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-.cell { padding: 8px; border: 1px solid #4443; border-radius: 8px; background: #0001; }
+.cell { padding: 8px; border: 1px solid #4443; border-radius: 8px; background: #0001; cursor: pointer; }
+.cell:focus { outline: 2px solid #37f; outline-offset: 2px; }
 .label { font-size: 12px; opacity: 0.8; user-select: none; cursor: pointer; }
 .bar { height: 8px; background: #ffffff1a; border-radius: 4px; overflow: hidden; margin: 6px 0; }
 .fill { height: 100%; background: linear-gradient(90deg, #37f 0%, #3fa 100%); }
@@ -27,7 +28,8 @@ main { display: grid; gap: 24px; grid-template-columns: 2fr 1fr; align-items: st
 .modal h3 { margin: 0 0 10px; font-size: 16px; }
 .modal .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
 .modal .row.input label { margin-right: 10px; }
-.modal input { width: 100px; padding: 6px 8px; border-radius: 6px; border: 1px solid #555; background: #0e0e12; color: #fff; }
+.modal input { width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid #555; background: #0e0e12; color: #fff; }
+.modal .row.input input#cc-input { width: 100px; }
 .modal .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .modal button { padding: 6px 10px; border-radius: 6px; border: 1px solid #555; background: #1f1f26; color: #fff; }
 .modal button#cc-save { background: #2b5; border-color: #2b5; color: #000; }

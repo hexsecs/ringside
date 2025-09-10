@@ -102,7 +102,7 @@ def invert_cc_map(mapping: CcMap) -> RevMap:
     return rev
 
 
-def set_encoder_cc(config: Config, bank: int, encoder: int, cc: int) -> Config:
+def set_encoder_cc(config: Config, bank: int, encoder: int, cc: int, label: str | None = None) -> Config:
     banks = config.setdefault("banks", {})
     b = banks.setdefault(str(int(bank)), {})
     encs = b.setdefault("encoders", {})
@@ -111,6 +111,7 @@ def set_encoder_cc(config: Config, bank: int, encoder: int, cc: int) -> Config:
         enc = {"id": int(encoder), "label": str(enc), "cc": int(cc)}
     enc["id"] = int(encoder)
     enc["cc"] = int(cc)
+    if label is not None:
+        enc["label"] = str(label)
     encs[str(int(encoder))] = enc
     return config
-

@@ -12,6 +12,7 @@
       <div class="toolbar">
         <div id="status">Connecting…</div>
         <div class="bank">Bank: <button data-bank="1">1</button><button data-bank="2">2</button><button data-bank="3">3</button><button data-bank="4">4</button></div>
+        <button id="test-open-modal" type="button" title="Temporary test button">Test Modal</button>
       </div>
     </header>
     <main>
@@ -31,6 +32,7 @@
         <h3 id="cc-modal-title">Assign MIDI CC</h3>
         <div class="row"><label>Bank</label><span id="cc-bank"></span></div>
         <div class="row"><label>Encoder</label><span id="cc-enc"></span></div>
+        <div class="row input"><label for="cc-label">Label</label><input id="cc-label" type="text" placeholder="Encoder label" /></div>
         <div class="row input"><label for="cc-input">CC</label><input id="cc-input" type="number" min="0" max="127" /></div>
         <div class="actions">
           <button id="cc-cancel" type="button">Cancel</button>

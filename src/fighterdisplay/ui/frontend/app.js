@@ -13,48 +13,92 @@ let ccMap = {}; // { bank: { encoder: cc } }
 // Cache last known state/mapping for quick local reads
 let latestState = null;
 let latestMapping = null;
+let modalOpening = false;
 
-// Modal controls
-const modalBackdrop = document.getElementById('modal-backdrop');
-const modal = document.getElementById('cc-modal');
-const modalBank = document.getElementById('cc-bank');
-const modalEnc = document.getElementById('cc-enc');
-const modalInput = document.getElementById('cc-input');
-const modalCancel = document.getElementById('cc-cancel');
-const modalSave = document.getElementById('cc-save');
+function isModalVisible() {
+  const el = document.getElementById('cc-modal');
+  return !!(el && !el.classList.contains('hidden'));
+}
+
+function scheduleOpen(enc) {
+  if (isModalVisible()) { console.log('[CC Modal] already visible'); return; }
+  if (modalOpening) { console.log('[CC Modal] opening in progress'); return; }
+  modalOpening = true;
+  console.log('[CC Modal] scheduleOpen', { enc });
+  // Defer to next frame to avoid clashes with other handlers/reflows
+  requestAnimationFrame(() => {
+    try { openAssignModal(enc); } finally { modalOpening = false; }
+  });
+}
+
+// Modal controls (look up on demand to avoid null refs after hot reloads)
+function $id(id) { return document.getElementById(id); }
 
 let modalCtx = { bank: 1, enc: 1 };
 
 function showModal(show) {
+  const modalBackdrop = $id('modal-backdrop');
+  const modal = $id('cc-modal');
+  const modalInput = $id('cc-input');
+  if (!modalBackdrop || !modal) {
+    console.warn('[CC Modal] Missing modal elements', { modalBackdrop: !!modalBackdrop, modal: !!modal });
+    return;
+  }
   if (show) {
+    console.log('[CC Modal] show');
     modalBackdrop.classList.remove('hidden');
     modal.classList.remove('hidden');
-    setTimeout(() => { try { modalInput.focus(); modalInput.select(); } catch {} }, 0);
+    setTimeout(() => { try { modalInput && modalInput.focus(); modalInput && modalInput.select(); } catch {} }, 0);
   } else {
+    console.log('[CC Modal] hide');
     modalBackdrop.classList.add('hidden');
     modal.classList.add('hidden');
   }
 }
 
 function openAssignModal(enc) {
+  console.log('[CC Modal] openAssignModal', { enc });
   const s = latestState || {};
   const bank = (s && s.current_bank) || 1;
   modalCtx = { bank, enc };
+  const modalBank = $id('cc-bank');
+  const modalEnc = $id('cc-enc');
+  const modalInput = $id('cc-input');
+  const modalLabel = $id('cc-label');
+  if (!modalBank || !modalEnc || !modalInput || !modalLabel) {
+    console.warn('[CC Modal] Missing fields', { modalBank: !!modalBank, modalEnc: !!modalEnc, modalInput: !!modalInput, modalLabel: !!modalLabel });
+    return;
+  }
   modalBank.textContent = String(bank);
   modalEnc.textContent = String(enc);
   const prev = (ccMap[bank] && ccMap[bank][enc] != null) ? ccMap[bank][enc] : '';
   modalInput.value = String(prev);
+  // Fill current label
+  try {
+    const currLabel = (latestState && latestState.banks && latestState.banks[bank] && latestState.banks[bank].encoders && latestState.banks[bank].encoders[enc] && latestState.banks[bank].encoders[enc].label) || '';
+    modalLabel.value = currLabel;
+  } catch {}
   showModal(true);
 }
 
 async function saveAssignModal() {
+  const modalInput = $id('cc-input');
+  const modalLabel = $id('cc-label');
+  if (!modalInput || !modalLabel) return;
   const cc = parseInt(modalInput.value, 10);
   if (!Number.isFinite(cc) || cc < 0 || cc > 127) { return; }
+  const label = String(modalLabel.value || '');
   try {
-    const res = await fetch('/api/mapping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bank: modalCtx.bank, encoder: modalCtx.enc, cc }) });
+    const res = await fetch('/api/mapping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bank: modalCtx.bank, encoder: modalCtx.enc, cc, label }) });
     const out = await res.json();
     if (out && out.mapping) {
       latestMapping = out.mapping;
+      // Optimistically update label locally for snappy UI
+      try {
+        if (latestState && latestState.banks && latestState.banks[modalCtx.bank] && latestState.banks[modalCtx.bank].encoders && latestState.banks[modalCtx.bank].encoders[modalCtx.enc]) {
+          latestState.banks[modalCtx.bank].encoders[modalCtx.enc].label = label;
+        }
+      } catch {}
       render(latestState || {}, latestMapping);
     }
   } catch {}
@@ -103,8 +147,8 @@ function render(state, mapping = null) {
       const pct = Math.round((e.value || 0) / 127 * 100);
       const cc = (ccMap[bank] && ccMap[bank][k] != null) ? ccMap[bank][k] : (k - 1);
       return `
-        <div class="cell">
-          <div class="label" data-enc="${k}">${(e.label || ('Enc ' + k)) + ' (CC ' + cc + ')'}</div>
+        <div class="cell" data-enc="${k}" role="button" tabindex="0" aria-label="Encoder ${k} (CC ${cc})">
+          <div class="label">${(e.label || ('Enc ' + k)) + ' (CC ' + cc + ')'}</div>
           <div class="bar"><div class="fill" style="width:${pct}%"></div></div>
           <div class="value">${e.value || 0}</div>
         </div>
@@ -247,21 +291,58 @@ setTimeout(initWebMIDI, 200);
 
 // ----- Simple CC assignment via clicking label -----
 encodersEl.addEventListener('click', (ev) => {
-  const label = ev.target.closest('.label');
-  if (!label) return;
-  ev.preventDefault();
-  ev.stopPropagation();
-  const enc = parseInt(label.dataset.enc, 10);
+  const cell = ev.target.closest('.cell[data-enc]');
+  if (!cell) return;
+  const enc = parseInt(cell.dataset.enc, 10);
   if (!enc) return;
-  openAssignModal(enc);
+  console.log('[CC Modal] cell click', { enc });
+  scheduleOpen(enc);
 });
 
-modalCancel.addEventListener('click', (e) => { e.preventDefault(); cancelAssignModal(); });
-modalSave.addEventListener('click', (e) => { e.preventDefault(); saveAssignModal(); });
-modalBackdrop.addEventListener('click', (e) => { e.preventDefault(); cancelAssignModal(); });
+// Keyboard support on label (Enter/Space)
+encodersEl.addEventListener('keydown', (ev) => {
+  const cell = ev.target.closest('.cell[data-enc]');
+  if (!cell) return;
+  if (ev.key === 'Enter' || ev.key === ' ') {
+    ev.preventDefault();
+    const enc = parseInt(cell.dataset.enc, 10);
+    if (enc) {
+      console.log('[CC Modal] cell keydown', { enc, key: ev.key });
+      scheduleOpen(enc);
+    }
+  }
+});
+
+// Fallback: pointerup to catch some platforms where click is flaky
+encodersEl.addEventListener('pointerup', (ev) => {
+  const cell = ev.target.closest('.cell[data-enc]');
+  if (!cell) return;
+  const enc = parseInt(cell.dataset.enc, 10);
+  if (!enc) return;
+  if (!isModalVisible()) {
+    console.log('[CC Modal] cell pointerup', { enc });
+    scheduleOpen(enc);
+  }
+});
+
+document.addEventListener('click', (e) => {
+  const target = e.target;
+  if (target && target.id === 'cc-cancel') { e.preventDefault(); cancelAssignModal(); }
+  if (target && target.id === 'cc-save') { e.preventDefault(); saveAssignModal(); }
+  if (target && target.id === 'modal-backdrop') { e.preventDefault(); cancelAssignModal(); }
+});
+
 window.addEventListener('keydown', (e) => {
-  if (!modal.classList.contains('hidden')) {
+  const modal = $id('cc-modal');
+  if (modal && !modal.classList.contains('hidden')) {
     if (e.key === 'Escape') { e.preventDefault(); cancelAssignModal(); }
     if (e.key === 'Enter') { e.preventDefault(); saveAssignModal(); }
   }
+});
+
+// Temporary test button
+document.getElementById('test-open-modal')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  console.log('[CC Modal] test button clicked');
+  openAssignModal(1);
 });

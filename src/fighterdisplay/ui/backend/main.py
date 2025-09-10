@@ -219,15 +219,36 @@ async def api_set_mapping(payload: dict = Body(...)):
     try:
         bank = int(payload.get("bank"))
         encoder = int(payload.get("encoder"))
-        cc = int(payload.get("cc"))
     except Exception:
         return {"ok": False, "error": "invalid payload"}
-    if not (1 <= bank <= 4 and 1 <= encoder <= 16 and 0 <= cc <= 127):
-        return {"ok": False, "error": "out of range"}
-    app_config = set_encoder_cc(dict(app_config), bank, encoder, cc)
+    label = payload.get("label")
+    cc_val = payload.get("cc")
+    if cc_val is None and label is None:
+        return {"ok": False, "error": "no fields to update"}
+    if cc_val is not None:
+        try:
+            cc_int = int(cc_val)
+        except Exception:
+            return {"ok": False, "error": "invalid cc"}
+        if not (0 <= cc_int <= 127):
+            return {"ok": False, "error": "cc out of range"}
+    else:
+        # Keep existing cc for this encoder if present
+        cc_int = cc_map.get(bank, {}).get(encoder, 0)
+    # Update unified config (cc and optional label)
+    app_config = set_encoder_cc(dict(app_config), bank, encoder, cc_int, label=label if label is not None else None)
     cc_map = cc_map_from_config(app_config)
     cc_reverse = invert_cc_map(cc_map)
     save_config(_config_path(), app_config)
+    # If label changed, update runtime state label immediately
+    if label is not None:
+        snap = state.snapshot()
+        current_val = 0
+        try:
+            current_val = snap.banks[bank].encoders[encoder].value
+        except Exception:
+            pass
+        state.update_encoder(bank, encoder, current_val, label=str(label))
     await broadcast({"type": "mapping", "mapping": cc_map, "state": state.snapshot().model_dump()})
     return {"ok": True, "mapping": cc_map}
 
