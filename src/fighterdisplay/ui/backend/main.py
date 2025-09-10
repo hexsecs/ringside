@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 from fighterdisplay.core.state import StateStore
 from fighterdisplay.core.presets import load_preset, apply_labels
+from fighterdisplay.core.mapping import load_cc_map, save_cc_map, invert_cc_map, set_cc
 from fighterdisplay.midi.device import (
     list_input_ports,
     list_output_ports,
@@ -29,6 +30,9 @@ outbound_queue: asyncio.Queue[tuple[int, int, int]] = asyncio.Queue()
 _midi_out = None
 LED_ECHO = os.getenv("LED_ECHO", "1") not in ("0", "false", "False", "no")
 HEARTBEAT_HZ = float(os.getenv("HEARTBEAT_HZ", "10"))  # reduce spam vs 60 Hz
+CC_MAP_PATH = os.getenv("CC_MAP_PATH", "assets/presets/cc_map.json")
+cc_map: dict[int, dict[int, int]] = {}
+cc_reverse: dict[int, tuple[int, int]] = {}
 
 
 async def broadcast(payload: dict):
@@ -59,11 +63,21 @@ def process_midi_msg(msg: dict) -> None:
         channel = 0
     if control is None or value is None:
         return
-    # Derive bank from channel (1..4), fallback to current bank
-    derived_bank = max(1, min(4, channel + 1))
-    current = state.snapshot().current_bank
-    bank = derived_bank or current
-    enc_index = (int(control) % 16) + 1
+    # Try configured CC mapping first, else fallback
+    bank = None
+    enc_index = None
+    try:
+        pair = cc_reverse.get(int(control))
+        if pair:
+            bank, enc_index = pair
+    except Exception:
+        pass
+    if bank is None or enc_index is None:
+        # Derive bank from channel (1..4), fallback to current bank
+        derived_bank = max(1, min(4, channel + 1))
+        current = state.snapshot().current_bank
+        bank = derived_bank or current
+        enc_index = (int(control) % 16) + 1
     state.update_encoder(bank, enc_index, int(value))
     if LED_ECHO:
         try:
@@ -102,7 +116,7 @@ async def _midi_watcher():
             except asyncio.QueueEmpty:
                 pass
             await asyncio.sleep(max(0.05, 1.0 / HEARTBEAT_HZ))
-            await broadcast({"type": "heartbeat", "state": state.snapshot().model_dump()})
+            await broadcast({"type": "heartbeat", "state": state.snapshot().model_dump(), "mapping": cc_map})
     finally:
         if inp is not None:
             try:
@@ -125,6 +139,14 @@ async def lifespan(app: FastAPI):
             apply_labels(state, labels)
     except Exception:
         pass
+    # Load CC mapping
+    global cc_map, cc_reverse
+    try:
+        cc_map = load_cc_map(CC_MAP_PATH)
+        cc_reverse = invert_cc_map(cc_map)
+    except Exception:
+        cc_map, cc_reverse = {}, {}
+
     task = asyncio.create_task(_midi_watcher())
     try:
         yield
@@ -153,14 +175,14 @@ def api_ports():
 
 @app.get("/api/state")
 def api_state():
-    return state.snapshot().model_dump()
+    return {"state": state.snapshot().model_dump(), "mapping": cc_map}
 
 
 @app.post("/api/bank")
 async def api_set_bank(payload: dict = Body(...)):
     bank = int(payload.get("bank", 1))
     snap = state.set_bank(bank)
-    await broadcast({"type": "bank", "state": snap.model_dump()})
+    await broadcast({"type": "bank", "state": snap.model_dump(), "mapping": cc_map})
     return {"ok": True}
 
 
@@ -174,12 +196,35 @@ async def api_midi(payload: dict = Body(...)):
     return {"ok": True}
 
 
+@app.get("/api/mapping")
+def api_get_mapping():
+    return {"mapping": cc_map}
+
+
+@app.post("/api/mapping")
+async def api_set_mapping(payload: dict = Body(...)):
+    global cc_map, cc_reverse
+    try:
+        bank = int(payload.get("bank"))
+        encoder = int(payload.get("encoder"))
+        cc = int(payload.get("cc"))
+    except Exception:
+        return {"ok": False, "error": "invalid payload"}
+    if not (1 <= bank <= 4 and 1 <= encoder <= 16 and 0 <= cc <= 127):
+        return {"ok": False, "error": "out of range"}
+    cc_map = set_cc(dict(cc_map), bank, encoder, cc)
+    cc_reverse = invert_cc_map(cc_map)
+    save_cc_map(CC_MAP_PATH, cc_map)
+    await broadcast({"type": "mapping", "mapping": cc_map, "state": state.snapshot().model_dump()})
+    return {"ok": True, "mapping": cc_map}
+
+
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
     connections.add(ws)
     # Send initial snapshot
-    await ws.send_json({"type": "init", "state": state.snapshot().model_dump()})
+    await ws.send_json({"type": "init", "state": state.snapshot().model_dump(), "mapping": cc_map})
     try:
         while True:
             # Wait for state updates or client messages; cancel pending task to avoid leaks
@@ -196,7 +241,7 @@ async def ws_endpoint(ws: WebSocket):
             if wait_task in done:
                 update_event.clear()
             # Always send current state after any trigger
-            await ws.send_json({"type": "update", "state": state.snapshot().model_dump()})
+            await ws.send_json({"type": "update", "state": state.snapshot().model_dump(), "mapping": cc_map})
     except WebSocketDisconnect:
         pass
     except Exception:

@@ -8,6 +8,7 @@ let midiAccess = null;
 let midiIn = null;
 let midiOut = null;
 let echoLED = true; // echo CC back to Twister to drive LED rings
+let ccMap = {}; // { bank: { encoder: cc } }
 
 // WebSocket state with auto-reconnect
 let ws = null;
@@ -20,8 +21,16 @@ function setStatus(text, cls = '') {
   statusEl.className = cls;
 }
 
-function render(state) {
+function render(state, mapping = null) {
   const bank = state.current_bank || 1;
+  if (mapping) {
+    // Normalize mapping: either {banks:{}} or flat {bank:{encoder:cc}}
+    if (mapping.banks) {
+      ccMap = Object.fromEntries(Object.entries(mapping.banks).map(([b, encs]) => [parseInt(b, 10), Object.fromEntries(Object.entries(encs).map(([e, cc]) => [parseInt(e, 10), parseInt(cc, 10)]))]));
+    } else {
+      ccMap = Object.fromEntries(Object.entries(mapping).map(([b, encs]) => [parseInt(b, 10), Object.fromEntries(Object.entries(encs).map(([e, cc]) => [parseInt(e, 10), parseInt(cc, 10)]))]));
+    }
+  }
   // Update active bank button
   bankButtons.forEach((btn) => {
     const b = parseInt(btn.dataset.bank, 10);
@@ -35,10 +44,10 @@ function render(state) {
     .map((k) => {
       const e = encoders[k] || { label: '', value: 0 };
       const pct = Math.round((e.value || 0) / 127 * 100);
-      const cc = k - 1; // Twister sends CC 0..15 per bank (channel selects bank)
+      const cc = (ccMap[bank] && ccMap[bank][k] != null) ? ccMap[bank][k] : (k - 1);
       return `
         <div class="cell">
-          <div class="label">${(e.label || ('Enc ' + k)) + ' (CC ' + cc + ')'}</div>
+          <div class="label" data-enc="${k}">${(e.label || ('Enc ' + k)) + ' (CC ' + cc + ')'}</div>
           <div class="bar"><div class="fill" style="width:${pct}%"></div></div>
           <div class="value">${e.value || 0}</div>
         </div>
@@ -67,7 +76,8 @@ function connect() {
     // Prime UI with a fresh state fetch in case we missed updates
     try {
       const res = await fetch('/api/state');
-      render(await res.json());
+      const js = await res.json();
+      render(js.state || js, js.mapping);
     } catch {}
     // Keepalive pings from browser side
     if (keepaliveId) clearInterval(keepaliveId);
@@ -87,7 +97,7 @@ function connect() {
   ws.onmessage = (ev) => {
     try {
       const msg = JSON.parse(ev.data);
-      if (msg.state) render(msg.state);
+      if (msg.state) render(msg.state, msg.mapping);
     } catch {}
   };
 }
@@ -177,3 +187,27 @@ async function initWebMIDI() {
 
 // Request Web MIDI after a short delay to allow page to settle
 setTimeout(initWebMIDI, 200);
+
+// ----- Simple CC assignment via clicking label -----
+encodersEl.addEventListener('click', async (ev) => {
+  const label = ev.target.closest('.label');
+  if (!label) return;
+  const enc = parseInt(label.dataset.enc, 10);
+  if (!enc) return;
+  let js = null;
+  try { js = await fetch('/api/state').then(r => r.json()); } catch {}
+  const bank = (js && js.state && js.state.current_bank) || (js && js.current_bank) || 1;
+  const prev = (ccMap[bank] && ccMap[bank][enc] != null) ? ccMap[bank][enc] : '';
+  const ccStr = prompt(`Assign CC for Bank ${bank} Enc ${enc}`, String(prev));
+  if (ccStr == null) return;
+  const cc = parseInt(ccStr, 10);
+  if (!(cc >= 0 && cc <= 127)) return;
+  try {
+    const res = await fetch('/api/mapping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bank, encoder: enc, cc }) });
+    const out = await res.json();
+    const mapping = out.mapping;
+    if (mapping) {
+      render((js && js.state) || js || {}, mapping);
+    }
+  } catch {}
+});
