@@ -14,34 +14,55 @@ let ccMap = {}; // { bank: { encoder: cc } }
 let latestState = null;
 let latestMapping = null;
 
-// Click/double-click coordination
-let clickTimer = null;
-let isEditing = false;
+// Modal controls
+const modalBackdrop = document.getElementById('modal-backdrop');
+const modal = document.getElementById('cc-modal');
+const modalBank = document.getElementById('cc-bank');
+const modalEnc = document.getElementById('cc-enc');
+const modalInput = document.getElementById('cc-input');
+const modalCancel = document.getElementById('cc-cancel');
+const modalSave = document.getElementById('cc-save');
 
-function openAssignDialog(enc) {
-  if (isEditing) return;
-  isEditing = true;
-  try {
-    const s = latestState || {};
-    const bank = (s && s.current_bank) || 1;
-    const prev = (ccMap[bank] && ccMap[bank][enc] != null) ? ccMap[bank][enc] : '';
-    const ccStr = window.prompt(`Assign CC for Bank ${bank} Enc ${enc}`, String(prev));
-    if (ccStr == null) return; // cancelled
-    const cc = parseInt(ccStr, 10);
-    if (!Number.isFinite(cc) || cc < 0 || cc > 127) return; // invalid
-    fetch('/api/mapping', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bank, encoder: enc, cc })
-    }).then((r) => r.json()).then((out) => {
-      if (out && out.mapping) {
-        latestMapping = out.mapping;
-        render(latestState || {}, latestMapping);
-      }
-    }).catch(() => {});
-  } finally {
-    isEditing = false;
+let modalCtx = { bank: 1, enc: 1 };
+
+function showModal(show) {
+  if (show) {
+    modalBackdrop.classList.remove('hidden');
+    modal.classList.remove('hidden');
+    setTimeout(() => { try { modalInput.focus(); modalInput.select(); } catch {} }, 0);
+  } else {
+    modalBackdrop.classList.add('hidden');
+    modal.classList.add('hidden');
   }
+}
+
+function openAssignModal(enc) {
+  const s = latestState || {};
+  const bank = (s && s.current_bank) || 1;
+  modalCtx = { bank, enc };
+  modalBank.textContent = String(bank);
+  modalEnc.textContent = String(enc);
+  const prev = (ccMap[bank] && ccMap[bank][enc] != null) ? ccMap[bank][enc] : '';
+  modalInput.value = String(prev);
+  showModal(true);
+}
+
+async function saveAssignModal() {
+  const cc = parseInt(modalInput.value, 10);
+  if (!Number.isFinite(cc) || cc < 0 || cc > 127) { return; }
+  try {
+    const res = await fetch('/api/mapping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bank: modalCtx.bank, encoder: modalCtx.enc, cc }) });
+    const out = await res.json();
+    if (out && out.mapping) {
+      latestMapping = out.mapping;
+      render(latestState || {}, latestMapping);
+    }
+  } catch {}
+  showModal(false);
+}
+
+function cancelAssignModal() {
+  showModal(false);
 }
 
 // WebSocket state with auto-reconnect
@@ -232,21 +253,15 @@ encodersEl.addEventListener('click', (ev) => {
   ev.stopPropagation();
   const enc = parseInt(label.dataset.enc, 10);
   if (!enc) return;
-  // Defer single-click action briefly to allow dblclick to override
-  if (clickTimer) clearTimeout(clickTimer);
-  clickTimer = setTimeout(() => {
-    clickTimer = null;
-    openAssignDialog(enc);
-  }, 250);
+  openAssignModal(enc);
 });
 
-encodersEl.addEventListener('dblclick', (ev) => {
-  const label = ev.target.closest('.label');
-  if (!label) return;
-  ev.preventDefault();
-  ev.stopPropagation();
-  const enc = parseInt(label.dataset.enc, 10);
-  if (!enc) return;
-  if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
-  openAssignDialog(enc);
+modalCancel.addEventListener('click', (e) => { e.preventDefault(); cancelAssignModal(); });
+modalSave.addEventListener('click', (e) => { e.preventDefault(); saveAssignModal(); });
+modalBackdrop.addEventListener('click', (e) => { e.preventDefault(); cancelAssignModal(); });
+window.addEventListener('keydown', (e) => {
+  if (!modal.classList.contains('hidden')) {
+    if (e.key === 'Escape') { e.preventDefault(); cancelAssignModal(); }
+    if (e.key === 'Enter') { e.preventDefault(); saveAssignModal(); }
+  }
 });

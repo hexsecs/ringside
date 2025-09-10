@@ -24,6 +24,20 @@
         <pre id="ports">(loading)</pre>
       </section>
     </main>
+    <!-- CC Assign Modal -->
+    <div id="modal-backdrop" class="backdrop hidden"></div>
+    <div id="cc-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="cc-modal-title">
+      <div class="dialog">
+        <h3 id="cc-modal-title">Assign MIDI CC</h3>
+        <div class="row"><label>Bank</label><span id="cc-bank"></span></div>
+        <div class="row"><label>Encoder</label><span id="cc-enc"></span></div>
+        <div class="row input"><label for="cc-input">CC</label><input id="cc-input" type="number" min="0" max="127" /></div>
+        <div class="actions">
+          <button id="cc-cancel" type="button">Cancel</button>
+          <button id="cc-save" type="button">Save</button>
+        </div>
+      </div>
+    </div>
     <script src="/app.js" type="module"></script>
   </body>
   </html>
