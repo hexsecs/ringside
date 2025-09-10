@@ -234,22 +234,11 @@ async def ws_endpoint(ws: WebSocket):
     # Send initial snapshot
     await ws.send_json({"type": "init", "state": state.snapshot().model_dump(), "mapping": cc_map})
     try:
+        # Drain incoming messages to keep the connection healthy. All updates are
+        # pushed via broadcast() (heartbeat + state changes).
         while True:
-            # Wait for state updates or client messages; cancel pending task to avoid leaks
-            wait_task = asyncio.create_task(update_event.wait())
-            recv_task = asyncio.create_task(ws.receive_text())
-            done, pending = await asyncio.wait(
-                [wait_task, recv_task], return_when=asyncio.FIRST_COMPLETED
-            )
-            for p in pending:
-                p.cancel()
-                with contextlib.suppress(Exception):
-                    await p
-            # If the update_event fired, clear it before sending
-            if wait_task in done:
-                update_event.clear()
-            # Always send current state after any trigger
-            await ws.send_json({"type": "update", "state": state.snapshot().model_dump(), "mapping": cc_map})
+            with contextlib.suppress(Exception):
+                await ws.receive_text()
     except WebSocketDisconnect:
         pass
     except Exception:
