@@ -3,6 +3,8 @@
 body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 0 16px 32px; }
 header { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; gap: 12px; }
 .toolbar { display: flex; gap: 16px; align-items: center; }
+.presets { display: inline-flex; gap: 8px; align-items: center; }
+.presets select { padding: 4px 6px; }
 .bank button { margin-left: 4px; }
 .bank button.active { background: #37f; color: white; border-color: #37f; }
 #status.connecting { color: #d79a00; }
