@@ -8,12 +8,16 @@ HOST?=127.0.0.1
 PORT?=8000
 APP_DIR?=src
 
-.PHONY: setup dev dev-noreload test list-ports format lint clean
+.PHONY: setup setup-hw dev dev-noreload test list-ports format lint clean
 
 setup:
 	python3 -m venv $(VENV)
 	$(PIP) install --upgrade pip
 	$(PIP) install -r requirements.txt
+
+setup-hw:
+	# Install optional hardware/backends (python-rtmidi)
+	$(PIP) install -r requirements-hw.txt || true
 
 dev:
 	$(UVICORN) fighterdisplay.ui.backend.main:app --reload --host $(HOST) --port $(PORT) --app-dir $(APP_DIR)

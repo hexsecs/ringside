@@ -131,8 +131,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve static UI
-app.mount("/", StaticFiles(directory="src/fighterdisplay/ui/frontend", html=True), name="static")
+# Static UI will be mounted after API routes to avoid route shadowing
 
 
 @app.get("/api/ports")
@@ -182,3 +181,6 @@ async def ws_endpoint(ws: WebSocket):
         pass
     finally:
         connections.discard(ws)
+
+# Serve static UI (mounted last so API routes take precedence)
+app.mount("/", StaticFiles(directory="src/fighterdisplay/ui/frontend", html=True), name="static")

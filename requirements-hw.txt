@@ -1,0 +1,6 @@
+# Optional hardware/MIDI backend dependencies.
+# Install with: make setup-hw
+
+# python-rtmidi builds C extensions and may not have wheels for Python 3.13 yet.
+# Restrict to <3.13 to prefer wheels on common environments.
+python-rtmidi==1.5.8; python_version < "3.13"
