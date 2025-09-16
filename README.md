@@ -1,9 +1,8 @@
 Ringside Viewer
 ===============
 
+![](assets/images/Screenshot1.png)
 Ringside Viewer is a performance-oriented, browser-based controller display and preset manager designed for the Midi Fighter Twister. It provides clear live-mode visuals, robust preset management, and reliable bank switching over LAN with optional Web MIDI echo.
-
-!()[./assets/images/Screenshot1.png]
 
 Key features
 - Presets: Load/Save/Save As/Download, dirty tracking, sorted lists, active preset header, and clearing of undefined labels on load.
