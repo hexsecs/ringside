@@ -3,26 +3,104 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FighterDisplay</title>
+    <meta name="application-name" content="Ringside Viewer" />
+    <title>Ringside Viewer</title>
+    <link rel="icon" href="/logo-dark.png" type="image/png" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <header>
-      <h1>FighterDisplay</h1>
+      <h1 class="app-title"><img class="logo" src="/logo-dark.png" alt="Ringside Viewer logo" /> <span>Ringside Viewer</span></h1>
       <div class="toolbar">
         <div id="status">Connecting…</div>
-        <div class="bank">Bank: <button data-bank="1">1</button><button data-bank="2">2</button><button data-bank="3">3</button><button data-bank="4">4</button></div>
-        <button id="test-open-modal" type="button" title="Temporary test button">Test Modal</button>
+        <span id="dirty-flag" class="dirty-flag hidden" title="You have unsaved changes">Unsaved changes</span>
+        <div id="active-preset" class="active-preset" aria-label="Active preset"></div>
+        <button id="fullscreen-toggle" class="icon-btn" type="button" title="Enter fullscreen" aria-label="Enter fullscreen">⛶</button>
+        <button id="settings-toggle" class="icon-btn" type="button" title="Show Presets & MIDI" aria-label="Show Presets & MIDI">⚙︎</button>
       </div>
     </header>
     <main>
-      <section>
-        <h2>Encoders</h2>
-        <div id="encoders" class="grid"></div>
+      <section id="settings-section" class="settings-section hidden">
+        <h2>Presets</h2>
+        <div class="settings">
+          <div class="row">
+            <label for="preset-select">Preset</label>
+            <select id="preset-select"></select>
+          </div>
+          <div class="row controls">
+            <button id="preset-load" type="button">Load</button>
+            <button id="preset-save-current" type="button">Save</button>
+            <button id="preset-save" type="button">Save As…</button>
+            <button id="preset-download" type="button">Download</button>
+          </div>
+        </div>
       </section>
-      <section>
-        <h2>Ports</h2>
-        <pre id="ports">(loading)</pre>
+      <section id="display-section" class="display-section hidden">
+        <h2>Display Settings</h2>
+        <div class="settings">
+          <div class="row controls">
+            <button id="toggle-show-cc" type="button" class="btn-toggle" aria-pressed="true" title="Toggle showing MIDI CC numbers">Show CC</button>
+            <button id="toggle-show-value" type="button" class="btn-toggle" aria-pressed="true" title="Toggle showing MIDI CC values">Show Value</button>
+          </div>
+          <div class="row controls">
+            <label style="min-width: auto;">Theme</label>
+            <div class="presets">
+              <button id="theme-system" type="button" class="btn-toggle" aria-pressed="true" title="Follow system appearance">System</button>
+              <button id="theme-light" type="button" class="btn-toggle" aria-pressed="false" title="Force light mode">Light</button>
+              <button id="theme-dark" type="button" class="btn-toggle" aria-pressed="false" title="Force dark mode">Dark</button>
+            </div>
+          </div>
+          <div class="row controls">
+            <label style="min-width: auto;">Banks Position</label>
+            <div class="presets">
+              <button id="bank-pos-above" type="button" class="btn-toggle" aria-pressed="true" title="Place Banks above Encoders">Above</button>
+              <button id="bank-pos-below" type="button" class="btn-toggle" aria-pressed="false" title="Place Banks below Encoders">Below</button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <div id="live-view" class="live-view" aria-label="Banks and Encoders">
+        <div class="fs-brand" aria-hidden="true">
+          <img class="fs-brand-logo" src="/logo-dark.png" alt="" />
+          <span class="fs-brand-title">Ringside Viewer</span>
+        </div>
+        <div id="live-preset-title" class="live-preset-title"></div>
+        <section class="banks">
+          <h2>Banks</h2>
+          <div class="bank bank-large" role="group" aria-label="Bank selection">
+            <button data-bank="1" type="button" aria-label="Bank 1">1</button>
+            <button data-bank="2" type="button" aria-label="Bank 2">2</button>
+            <button data-bank="3" type="button" aria-label="Bank 3">3</button>
+            <button data-bank="4" type="button" aria-label="Bank 4">4</button>
+          </div>
+        </section>
+        <section class="encoders-section">
+          <h2>Encoders</h2>
+          <div id="encoders" class="grid"></div>
+        </section>
+      </div>
+      <section id="midi-section" class="midi-section hidden">
+        <h2>MIDI Settings</h2>
+        <div id="midi-panel" class="midi">
+          <div class="row">
+            <label for="midi-in">Web MIDI Input</label>
+            <select id="midi-in"></select>
+          </div>
+          <div class="row">
+            <label for="midi-out">Web MIDI Output</label>
+            <select id="midi-out"></select>
+          </div>
+          <div class="row controls">
+            <label class="checkbox">
+              <input type="checkbox" id="send-bank-toggle" checked />
+              Send bank changes to device
+            </label>
+            <button id="midi-refresh" type="button">Refresh</button>
+            <button id="midi-learn" type="button" class="btn-toggle" title="Click an encoder, then move a control">MIDI Learn</button>
+          </div>
+          <div id="learn-note" class="footnote hidden">Click an encoder cell to arm it, then move a hardware control.</div>
+          <div class="footnote" id="ports-note"></div>
+        </div>
       </section>
     </main>
     <!-- CC Assign Modal -->
@@ -41,5 +119,11 @@
       </div>
     </div>
     <script src="/app.js" type="module"></script>
+    <footer class="app-footer" role="contentinfo">
+      <small>
+        © 2025 Philip Lapczynski • Licensed under
+        <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GNU GPL v3</a>.
+      </small>
+    </footer>
   </body>
   </html>

@@ -8,7 +8,7 @@ HOST?=127.0.0.1
 PORT?=8000
 APP_DIR?=src
 
-.PHONY: setup setup-hw dev dev-noreload dev-stop test list-ports format lint clean
+.PHONY: setup setup-hw dev dev-noreload dev-lan dev-lan-noreload dev-stop test list-ports format lint clean
 
 setup:
 	python3 -m venv $(VENV)
@@ -24,6 +24,13 @@ dev:
 
 dev-noreload:
 	$(UVICORN) fighterdisplay.ui.backend.main:app --host $(HOST) --port $(PORT) --app-dir $(APP_DIR)
+
+# Convenience targets for LAN access (bind to all interfaces)
+dev-lan:
+	$(UVICORN) fighterdisplay.ui.backend.main:app --reload --host 0.0.0.0 --port $(PORT) --app-dir $(APP_DIR)
+
+dev-lan-noreload:
+	$(UVICORN) fighterdisplay.ui.backend.main:app --host 0.0.0.0 --port $(PORT) --app-dir $(APP_DIR)
 
 dev-stop:
 	@# Stop a dev server by port if running
