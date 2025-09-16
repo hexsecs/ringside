@@ -37,37 +37,10 @@ outbound_queue: asyncio.Queue[tuple[int, int, int]] = asyncio.Queue()
 _midi_out = None
 LED_ECHO = os.getenv("LED_ECHO", "1") not in ("0", "false", "False", "no")
 HEARTBEAT_HZ = float(os.getenv("HEARTBEAT_HZ", "10"))  # reduce spam vs 60 Hz
-def _safe_name(name: str) -> str | None:
-    import re
-    base = name.strip()
-    if not base:
-        return None
-    if not base.endswith(".json"):
-        base += ".json"
-    if not re.match(r"^[A-Za-z0-9._-]+\.json$", base):
-        return None
-    return base
-
-
-def _config_dir() -> str:
-    cfg_path = os.getenv("CONFIG_PATH")
-    if cfg_path:
-        try:
-            return os.path.dirname(cfg_path) or "assets/presets"
-        except Exception:
-            return "assets/presets"
-    return os.getenv("CONFIG_DIR", "assets/presets")
-
-
 def _config_path() -> str:
-    cfg_path = os.getenv("CONFIG_PATH")
-    if cfg_path:
-        return cfg_path
-    return os.path.join(_config_dir(), current_preset)
-
+    return os.getenv("CONFIG_PATH", "assets/presets/default.json")
 
 app_config = {"banks": {}}
-current_preset = "default.json"
 cc_map: dict[int, dict[int, int]] = {}
 cc_reverse: dict[int, tuple[int, int]] = {}
 
@@ -173,14 +146,8 @@ async def _midi_watcher():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Load unified config (labels + CC mapping)
-    global app_config, cc_map, cc_reverse, current_preset
+    global app_config, cc_map, cc_reverse
     try:
-        # Resolve initial preset from env
-        cfg_path_env = os.getenv("CONFIG_PATH", "assets/presets/default.json")
-        try:
-            current_preset = os.path.basename(cfg_path_env)
-        except Exception:
-            current_preset = "default.json"
         app_config = load_config(_config_path())
         labels = labels_from_config(app_config)
         if labels:
@@ -220,7 +187,7 @@ def api_ports():
 
 @app.get("/api/state")
 def api_state():
-    return {"state": state.snapshot().model_dump(), "mapping": cc_map, "preset": os.path.basename(_config_path())}
+    return {"state": state.snapshot().model_dump(), "mapping": cc_map}
 
 
 @app.post("/api/bank")
@@ -284,61 +251,6 @@ async def api_set_mapping(payload: dict = Body(...)):
         state.update_encoder(bank, encoder, current_val, label=str(label))
     await broadcast({"type": "mapping", "mapping": cc_map, "state": state.snapshot().model_dump()})
     return {"ok": True, "mapping": cc_map}
-
-
-@app.get("/api/presets")
-def api_list_presets():
-    try:
-        files = [f for f in os.listdir(_config_dir()) if f.endswith('.json')]
-        files.sort()
-    except Exception:
-        files = []
-    return {"presets": files, "current": os.path.basename(_config_path())}
-
-
-@app.post("/api/presets/load")
-async def api_load_preset(payload: dict = Body(...)):
-    global app_config, cc_map, cc_reverse, current_preset
-    name = str(payload.get("name", "")).strip()
-    safe = _safe_name(name)
-    if not safe:
-        return {"ok": False, "error": "invalid name"}
-    path = os.path.join(_config_dir(), safe)
-    if not os.path.exists(path):
-        return {"ok": False, "error": "not found"}
-    try:
-        # Load and apply
-        app_config = load_config(path)
-        labels = labels_from_config(app_config)
-        if labels:
-            apply_labels(state, labels)
-        cc_map = cc_map_from_config(app_config)
-        cc_reverse = invert_cc_map(cc_map)
-        current_preset = safe
-        await broadcast({"type": "preset", "preset": current_preset, "mapping": cc_map, "state": state.snapshot().model_dump()})
-        return {"ok": True, "preset": current_preset}
-    except Exception:
-        return {"ok": False, "error": "load failed"}
-
-
-@app.post("/api/presets/save")
-def api_save_preset(payload: dict = Body(...)):
-    global current_preset
-    name = str(payload.get("name", "")).strip()
-    safe = _safe_name(name)
-    if not safe:
-        return {"ok": False, "error": "invalid name"}
-    path = os.path.join(_config_dir(), safe)
-    ok = save_config(path, app_config)
-    if ok:
-        current_preset = safe
-        try:
-            files = [f for f in os.listdir(_config_dir()) if f.endswith('.json')]
-            files.sort()
-        except Exception:
-            files = []
-        return {"ok": True, "preset": current_preset, "presets": files}
-    return {"ok": False, "error": "save failed"}
 
 
 @app.websocket("/ws")

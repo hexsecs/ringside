@@ -2,8 +2,6 @@ const statusEl = document.getElementById('status');
 const encodersEl = document.getElementById('encoders');
 const portsEl = document.getElementById('ports');
 const bankButtons = Array.from(document.querySelectorAll('.bank button'));
-const presetSelect = document.getElementById('preset-select');
-const presetSaveBtn = document.getElementById('preset-save');
 
 // Web MIDI state
 let midiAccess = null;
@@ -169,18 +167,6 @@ async function fetchPorts() {
   }
 }
 
-async function fetchPresets() {
-  try {
-    const res = await fetch('/api/presets');
-    const js = await res.json();
-    const presets = js.presets || [];
-    const current = js.current || '';
-    presetSelect.innerHTML = presets.map((n) => `<option value="${n}" ${n===current?'selected':''}>${n}</option>`).join('');
-  } catch (e) {
-    // ignore
-  }
-}
-
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   setStatus('Connecting…', 'connecting');
@@ -218,7 +204,6 @@ function connect() {
 }
 
 fetchPorts();
-fetchPresets();
 connect();
 
 bankButtons.forEach((btn) => {
@@ -360,31 +345,4 @@ document.getElementById('test-open-modal')?.addEventListener('click', (e) => {
   e.preventDefault();
   console.log('[CC Modal] test button clicked');
   openAssignModal(1);
-});
-
-// Presets UI
-presetSelect?.addEventListener('change', async () => {
-  const name = presetSelect.value;
-  try {
-    const r = await fetch('/api/presets/load', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
-    const js = await r.json();
-    if (js && js.ok) {
-      // Refresh presets in case current changed
-      fetchPresets();
-    }
-  } catch {}
-});
-
-presetSaveBtn?.addEventListener('click', async () => {
-  const name = prompt('Save preset as (name):');
-  if (!name) return;
-  try {
-    const r = await fetch('/api/presets/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
-    const js = await r.json();
-    if (js && js.ok) {
-      await fetchPresets();
-      // Select the saved preset
-      if (js.preset) presetSelect.value = js.preset;
-    }
-  } catch {}
 });

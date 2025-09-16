@@ -24,22 +24,22 @@
         },
         "5": {
           "id": 5,
-          "label": "Attack",
+          "label": "",
           "cc": 18
         },
         "6": {
           "id": 6,
-          "label": "Decay",
+          "label": "",
           "cc": 19
         },
         "7": {
           "id": 7,
-          "label": "Sustain",
+          "label": "",
           "cc": 20
         },
         "8": {
           "id": 8,
-          "label": "Release",
+          "label": "",
           "cc": 21
         },
         "9": {
