@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Ringside Viewer – Synthwave Icon</title>
+  <desc id="desc">Retro sun with stripes over a neon grid in synthwave colors.</desc>
+
+  <defs>
+    <!-- Background gradient -->
+    <linearGradient id="bg-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0b1020"/>
+      <stop offset="100%" stop-color="#150b35"/>
+    </linearGradient>
+
+    <!-- Sun gradient -->
+    <linearGradient id="sun-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FF9A00"/>
+      <stop offset="60%" stop-color="#FF006A"/>
+      <stop offset="100%" stop-color="#8A2BE2"/>
+    </linearGradient>
+
+    <!-- Outer glow -->
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Stripe mask for the sun -->
+    <mask id="sun-stripes">
+      <rect x="0" y="0" width="512" height="512" fill="black"/>
+      <circle cx="180" cy="190" r="120" fill="white"/>
+      <g fill="black">
+        <rect x="70" y="170" width="220" height="10"/>
+        <rect x="70" y="195" width="220" height="10"/>
+        <rect x="70" y="220" width="220" height="10"/>
+      </g>
+    </mask>
+
+    <linearGradient id="grid-line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#00F5FF" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#8A2BE2" stop-opacity="0.9"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="512" height="512" fill="url(#bg-grad)"/>
+
+  <!-- Retro sun with stripes -->
+  <g opacity="0.95">
+    <circle cx="180" cy="190" r="120" fill="url(#sun-grad)" mask="url(#sun-stripes)" filter="url(#glow)"/>
+  </g>
+
+  <!-- Grid floor -->
+  <g transform="translate(0,260)" opacity="0.9">
+    <!-- Horizontal lines (perspective spacing) -->
+    <path d="M0,0 H512 M0,18 H512 M0,40 H512 M0,70 H512 M0,110 H512 M0,160 H512" stroke="url(#grid-line)" stroke-width="1" fill="none"/>
+    <!-- Vertical lines (vanishing to a mid-right point) -->
+    <g stroke="url(#grid-line)" stroke-width="1">
+      <path d="M0,0 L280,160"/>
+      <path d="M60,0 L310,160"/>
+      <path d="M120,0 L340,160"/>
+      <path d="M180,0 L370,160"/>
+      <path d="M240,0 L400,160"/>
+      <path d="M300,0 L430,160"/>
+      <path d="M360,0 L460,160"/>
+      <path d="M420,0 L490,160"/>
+      <path d="M480,0 L520,160"/>
+    </g>
+  </g>
+</svg>

@@ -117,7 +117,7 @@ body[data-bank-pos="below"] #live-view:fullscreen .banks { grid-row: 3; }
 #live-view:fullscreen .live-preset-title {
   display: block;
   text-align: center;
-  font-size: clamp(22px, 6vw, 42px);
+  font-size: clamp(32px, 8vw, 64px);
   font-weight: 800;
   letter-spacing: 0.5px;
   color: #ffffff;
@@ -310,25 +310,7 @@ body[data-theme="light"] #live-view:fullscreen .bar { background: rgba(0,0,0,0.1
 body[data-theme="light"] #live-view:fullscreen .bank-large button { color: #111; background: rgba(0,0,0,0.08); border-color: #668eff; }
 body[data-theme="light"] #live-view:fullscreen .bank-large button.active { background: #7A5CFF; border-color: #7A5CFF; color: #fff; }
 
-/* Fullscreen watermark logo overlay (topmost layer, 10% opacity) */
-#live-view:fullscreen { position: relative; }
-#live-view:fullscreen::after {
-  content: "";
-  position: fixed;
-  left: 0; top: 0; width: 100vw; height: 100vh;
-  background-repeat: no-repeat;
-  background-position: center center;
-  background-size: auto 100%; /* fit height, preserve aspect */
-  opacity: 0.01;
-  pointer-events: none;
-  z-index: 9999;
-  background-image: url('/logo-light.png');
-}
-@media (prefers-color-scheme: dark) {
-  #live-view:fullscreen::after { background-image: url('/logo-dark.png'); }
-}
-body[data-theme="dark"] #live-view:fullscreen::after { background-image: url('/logo-dark.png'); }
-body[data-theme="light"] #live-view:fullscreen::after { background-image: url('/logo-light.png'); }
+/* Removed fullscreen watermark background overlay */
 
 /* Fullscreen top-left brand (small and subtle) */
 .fs-brand { display: none; }
@@ -336,16 +318,14 @@ body[data-theme="light"] #live-view:fullscreen::after { background-image: url('/
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  grid-row: 1;
-  grid-column: 1 / -1;
-  justify-self: start;
-  align-self: center; /* vertically align with preset title row */
-  position: relative;
+  position: fixed;
+  top: 10px;
+  left: 12px;
   z-index: 10000;
   pointer-events: none;
   opacity: 1;
   /* Match preset title scale */
-  font-size: clamp(22px, 6vw, 42px);
+  font-size: clamp(32px, 8vw, 64px);
 }
 .fs-brand-logo { height: 1.2em; width: auto; display: block; }
 .fs-brand-title { font-size: 1em; font-weight: 700; color: rgba(255,255,255,0.7); letter-spacing: 0.2px; }
