@@ -9,7 +9,7 @@ from typing import Dict, Any, Tuple
 # {
 #   "banks": {
 #     "1": { "encoders": {
-#       "1": {"id": 1, "label": "Cutoff", "cc": 14},
+#       "1": {"id": 1, "label": "Cutoff", "cc": 14, "channel": 1},
 #       ...
 #     }},
 #     ...
@@ -20,6 +20,7 @@ from typing import Dict, Any, Tuple
 Config = Dict[str, Any]
 LabelsMap = Dict[int, Dict[int, str]]
 CcMap = Dict[int, Dict[int, int]]
+ChanMap = Dict[int, Dict[int, int]]
 RevMap = Dict[int, Tuple[int, int]]
 
 
@@ -94,6 +95,25 @@ def cc_map_from_config(config: Config) -> CcMap:
     return cmap
 
 
+def channels_from_config(config: Config) -> ChanMap:
+    cmap: ChanMap = {}
+    banks = config.get("banks", {})
+    for b, bdata in _ensure_int_keys(banks).items():
+        encs = (bdata or {}).get("encoders", {})
+        bank_map: Dict[int, int] = {}
+        for e, edata in _ensure_int_keys(encs).items():
+            ch = 1
+            if isinstance(edata, dict) and "channel" in edata:
+                try:
+                    ch = int(edata["channel"])
+                except Exception:
+                    ch = 1
+            bank_map[e] = max(1, min(16, int(ch or 1)))
+        if bank_map:
+            cmap[b] = bank_map
+    return cmap
+
+
 def invert_cc_map(mapping: CcMap) -> RevMap:
     rev: RevMap = {}
     for bank, encs in mapping.items():
@@ -102,15 +122,22 @@ def invert_cc_map(mapping: CcMap) -> RevMap:
     return rev
 
 
-def set_encoder_cc(config: Config, bank: int, encoder: int, cc: int, label: str | None = None) -> Config:
+def set_encoder_cc(config: Config, bank: int, encoder: int, cc: int, label: str | None = None, channel: int | None = None) -> Config:
     banks = config.setdefault("banks", {})
     b = banks.setdefault(str(int(bank)), {})
     encs = b.setdefault("encoders", {})
-    enc = encs.setdefault(str(int(encoder)), {"id": int(encoder), "label": "", "cc": int(cc)})
+    enc = encs.setdefault(str(int(encoder)), {"id": int(encoder), "label": "", "cc": int(cc), "channel": int(channel or 1)})
     if not isinstance(enc, dict):
-        enc = {"id": int(encoder), "label": str(enc), "cc": int(cc)}
+        enc = {"id": int(encoder), "label": str(enc), "cc": int(cc), "channel": int(channel or 1)}
     enc["id"] = int(encoder)
     enc["cc"] = int(cc)
+    # Default to channel 1 if not provided
+    if channel is None:
+        try:
+            channel = int(enc.get("channel", 1))
+        except Exception:
+            channel = 1
+    enc["channel"] = max(1, min(16, int(channel or 1)))
     if label is not None:
         enc["label"] = str(label)
     encs[str(int(encoder))] = enc

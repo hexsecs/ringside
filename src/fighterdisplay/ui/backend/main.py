@@ -18,6 +18,7 @@ from fighterdisplay.core.config import (
     save_config,
     labels_from_config,
     cc_map_from_config,
+    channels_from_config,
     invert_cc_map,
     set_encoder_cc,
 )
@@ -70,6 +71,7 @@ def _config_path() -> str:
 app_config = {"banks": {}}
 current_preset = "default.json"
 cc_map: dict[int, dict[int, int]] = {}
+channel_map: dict[int, dict[int, int]] = {}
 cc_reverse: dict[int, tuple[int, int]] = {}
 _main_loop: asyncio.AbstractEventLoop | None = None
 unsaved_changes: bool = False
@@ -119,7 +121,7 @@ def process_midi_msg(msg: dict) -> None:
         if int(channel) == 3 and int(value) == 127 and int(control) in (0, 1, 2, 3):
             new_bank = int(control) + 1  # 0..3 -> bank 1..4
             snap = state.set_bank(new_bank)
-            _schedule(broadcast({"type": "bank", "state": snap.model_dump(), "mapping": cc_map, "dirty": unsaved_changes}))
+            _schedule(broadcast({"type": "bank", "state": snap.model_dump(), "mapping": cc_map, "channels": channel_map, "dirty": unsaved_changes}))
             loop = asyncio.get_event_loop()
             loop.call_soon_threadsafe(update_event.set)
             return
@@ -145,7 +147,7 @@ def process_midi_msg(msg: dict) -> None:
             current_bank = state.snapshot().current_bank
             if int(bank) != int(current_bank):
                 snap = state.set_bank(int(bank))
-                _schedule(broadcast({"type": "bank", "state": snap.model_dump(), "mapping": cc_map, "dirty": unsaved_changes}))
+                _schedule(broadcast({"type": "bank", "state": snap.model_dump(), "mapping": cc_map, "channels": channel_map, "dirty": unsaved_changes}))
         except Exception:
             pass
     state.update_encoder(bank, enc_index, int(value))
@@ -186,7 +188,7 @@ async def _midi_watcher():
             except asyncio.QueueEmpty:
                 pass
             await asyncio.sleep(max(0.05, 1.0 / HEARTBEAT_HZ))
-            await broadcast({"type": "heartbeat", "state": state.snapshot().model_dump(), "mapping": cc_map, "dirty": unsaved_changes})
+            await broadcast({"type": "heartbeat", "state": state.snapshot().model_dump(), "mapping": cc_map, "channels": channel_map, "dirty": unsaved_changes})
     finally:
         if inp is not None:
             try:
@@ -203,7 +205,7 @@ async def _midi_watcher():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Load unified config (labels + CC mapping)
-    global app_config, cc_map, cc_reverse, current_preset, _main_loop, unsaved_changes
+    global app_config, cc_map, channel_map, cc_reverse, current_preset, _main_loop, unsaved_changes
     try:
         _main_loop = asyncio.get_running_loop()
         # Resolve initial preset from env
@@ -217,11 +219,12 @@ async def lifespan(app: FastAPI):
         if labels:
             apply_labels(state, labels)
         cc_map = cc_map_from_config(app_config)
+        channel_map = channels_from_config(app_config)
         cc_reverse = invert_cc_map(cc_map)
         unsaved_changes = False
     except Exception:
         app_config = {"banks": {}}
-        cc_map, cc_reverse = {}, {}
+        cc_map, channel_map, cc_reverse = {}, {}, {}
         unsaved_changes = False
     task = asyncio.create_task(_midi_watcher())
     try:
@@ -253,7 +256,7 @@ def api_ports():
 
 @app.get("/api/state")
 def api_state():
-    return {"state": state.snapshot().model_dump(), "mapping": cc_map, "preset": os.path.basename(_config_path()), "dirty": unsaved_changes}
+    return {"state": state.snapshot().model_dump(), "mapping": cc_map, "channels": channel_map, "preset": os.path.basename(_config_path()), "dirty": unsaved_changes}
 
 
 @app.post("/api/bank")
@@ -267,7 +270,7 @@ async def api_set_bank(payload: dict = Body(...)):
         outbound_queue.put_nowait((control, 127, 3))
     except Exception:
         pass
-    await broadcast({"type": "bank", "state": snap.model_dump(), "mapping": cc_map, "dirty": unsaved_changes})
+    await broadcast({"type": "bank", "state": snap.model_dump(), "mapping": cc_map, "channels": channel_map, "dirty": unsaved_changes})
     return {"ok": True}
 
 
@@ -283,18 +286,19 @@ async def api_midi(payload: dict = Body(...)):
 
 @app.get("/api/mapping")
 def api_get_mapping():
-    return {"mapping": cc_map}
+    return {"mapping": cc_map, "channels": channel_map}
 
 
 @app.post("/api/mapping")
 async def api_set_mapping(payload: dict = Body(...)):
-    global app_config, cc_map, cc_reverse, unsaved_changes
+    global app_config, cc_map, channel_map, cc_reverse, unsaved_changes
     try:
         bank = int(payload.get("bank"))
         encoder = int(payload.get("encoder"))
     except Exception:
         return {"ok": False, "error": "invalid payload"}
     label = payload.get("label")
+    channel_val = payload.get("channel")
     cc_val = payload.get("cc")
     if cc_val is None and label is None:
         return {"ok": False, "error": "no fields to update"}
@@ -308,9 +312,20 @@ async def api_set_mapping(payload: dict = Body(...)):
     else:
         # Keep existing cc for this encoder if present
         cc_int = cc_map.get(bank, {}).get(encoder, 0)
+    # Channel parsing (1-16, default 1, preserve if omitted)
+    if channel_val is not None:
+        try:
+            ch_int = int(channel_val)
+        except Exception:
+            return {"ok": False, "error": "invalid channel"}
+        if not (1 <= ch_int <= 16):
+            return {"ok": False, "error": "channel out of range"}
+    else:
+        ch_int = channel_map.get(bank, {}).get(encoder, 1)
     # Update unified config (cc and optional label)
-    app_config = set_encoder_cc(dict(app_config), bank, encoder, cc_int, label=label if label is not None else None)
+    app_config = set_encoder_cc(dict(app_config), bank, encoder, cc_int, label=label if label is not None else None, channel=ch_int)
     cc_map = cc_map_from_config(app_config)
+    channel_map = channels_from_config(app_config)
     cc_reverse = invert_cc_map(cc_map)
     save_config(_config_path(), app_config)
     unsaved_changes = False
@@ -323,8 +338,8 @@ async def api_set_mapping(payload: dict = Body(...)):
         except Exception:
             pass
         state.update_encoder(bank, encoder, current_val, label=str(label))
-    await broadcast({"type": "mapping", "mapping": cc_map, "state": state.snapshot().model_dump(), "dirty": unsaved_changes})
-    return {"ok": True, "mapping": cc_map}
+    await broadcast({"type": "mapping", "mapping": cc_map, "channels": channel_map, "state": state.snapshot().model_dump(), "dirty": unsaved_changes})
+    return {"ok": True, "mapping": cc_map, "channels": channel_map}
 
 
 @app.post("/api/mapping/temp")
@@ -333,13 +348,14 @@ async def api_set_mapping_temp(payload: dict = Body(...)):
 
     Useful for staging edits until the user chooses Save/Save As.
     """
-    global app_config, cc_map, cc_reverse, unsaved_changes
+    global app_config, cc_map, channel_map, cc_reverse, unsaved_changes
     try:
         bank = int(payload.get("bank"))
         encoder = int(payload.get("encoder"))
     except Exception:
         return {"ok": False, "error": "invalid payload"}
     label = payload.get("label")
+    channel_val = payload.get("channel")
     cc_val = payload.get("cc")
     if cc_val is None and label is None:
         return {"ok": False, "error": "no fields to update"}
@@ -352,9 +368,20 @@ async def api_set_mapping_temp(payload: dict = Body(...)):
             return {"ok": False, "error": "cc out of range"}
     else:
         cc_int = cc_map.get(bank, {}).get(encoder, 0)
+    # Channel parsing (1-16, default 1, preserve if omitted)
+    if channel_val is not None:
+        try:
+            ch_int = int(channel_val)
+        except Exception:
+            return {"ok": False, "error": "invalid channel"}
+        if not (1 <= ch_int <= 16):
+            return {"ok": False, "error": "channel out of range"}
+    else:
+        ch_int = channel_map.get(bank, {}).get(encoder, 1)
     # Update in-memory config only
-    app_config = set_encoder_cc(dict(app_config), bank, encoder, cc_int, label=label if label is not None else None)
+    app_config = set_encoder_cc(dict(app_config), bank, encoder, cc_int, label=label if label is not None else None, channel=ch_int)
     cc_map = cc_map_from_config(app_config)
+    channel_map = channels_from_config(app_config)
     cc_reverse = invert_cc_map(cc_map)
     # Update runtime label if provided
     if label is not None:
@@ -366,8 +393,8 @@ async def api_set_mapping_temp(payload: dict = Body(...)):
             pass
         state.update_encoder(bank, encoder, current_val, label=str(label))
     unsaved_changes = True
-    await broadcast({"type": "mapping", "mapping": cc_map, "state": state.snapshot().model_dump(), "dirty": unsaved_changes})
-    return {"ok": True, "mapping": cc_map}
+    await broadcast({"type": "mapping", "mapping": cc_map, "channels": channel_map, "state": state.snapshot().model_dump(), "dirty": unsaved_changes})
+    return {"ok": True, "mapping": cc_map, "channels": channel_map}
 
 
 @app.get("/api/presets")
@@ -382,7 +409,7 @@ def api_list_presets():
 
 @app.post("/api/presets/load")
 async def api_load_preset(payload: dict = Body(...)):
-    global app_config, cc_map, cc_reverse, current_preset, unsaved_changes
+    global app_config, cc_map, channel_map, cc_reverse, current_preset, unsaved_changes
     name = str(payload.get("name", "")).strip()
     safe = _safe_name(name)
     if not safe:
@@ -414,10 +441,11 @@ async def api_load_preset(payload: dict = Body(...)):
             # If clearing fails, continue without aborting load
             pass
         cc_map = cc_map_from_config(app_config)
+        channel_map = channels_from_config(app_config)
         cc_reverse = invert_cc_map(cc_map)
         current_preset = safe
         unsaved_changes = False
-        await broadcast({"type": "preset", "preset": current_preset, "mapping": cc_map, "state": state.snapshot().model_dump(), "dirty": unsaved_changes})
+        await broadcast({"type": "preset", "preset": current_preset, "mapping": cc_map, "channels": channel_map, "state": state.snapshot().model_dump(), "dirty": unsaved_changes})
         return {"ok": True, "preset": current_preset}
     except Exception:
         return {"ok": False, "error": "load failed"}
@@ -468,7 +496,7 @@ async def ws_endpoint(ws: WebSocket):
     await ws.accept()
     connections.add(ws)
     # Send initial snapshot
-    await ws.send_json({"type": "init", "state": state.snapshot().model_dump(), "mapping": cc_map, "dirty": unsaved_changes})
+    await ws.send_json({"type": "init", "state": state.snapshot().model_dump(), "mapping": cc_map, "channels": channel_map, "dirty": unsaved_changes})
     try:
         # Drain incoming messages to keep the connection healthy. All updates are
         # pushed via broadcast() (heartbeat + state changes).

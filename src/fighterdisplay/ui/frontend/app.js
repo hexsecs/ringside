@@ -35,6 +35,7 @@ let midiIn = null;
 let midiOut = null;
 let echoLED = true; // echo CC back to Twister to drive LED rings
 let ccMap = {}; // { bank: { encoder: cc } }
+let chanMap = {}; // { bank: { encoder: channel (1..16) } }
 let midiInMap = new Map();
 let midiOutMap = new Map();
 let midiLearn = false;
@@ -101,15 +102,18 @@ function openAssignModal(enc) {
   const modalBank = $id('cc-bank');
   const modalEnc = $id('cc-enc');
   const modalInput = $id('cc-input');
+  const modalChan = $id('cc-channel');
   const modalLabel = $id('cc-label');
-  if (!modalBank || !modalEnc || !modalInput || !modalLabel) {
-    console.warn('[CC Modal] Missing fields', { modalBank: !!modalBank, modalEnc: !!modalEnc, modalInput: !!modalInput, modalLabel: !!modalLabel });
+  if (!modalBank || !modalEnc || !modalInput || !modalLabel || !modalChan) {
+    console.warn('[CC Modal] Missing fields', { modalBank: !!modalBank, modalEnc: !!modalEnc, modalInput: !!modalInput, modalLabel: !!modalLabel, modalChan: !!modalChan });
     return;
   }
   modalBank.textContent = String(bank);
   modalEnc.textContent = String(enc);
   const prev = (ccMap[bank] && ccMap[bank][enc] != null) ? ccMap[bank][enc] : '';
   modalInput.value = String(prev);
+  const prevCh = (chanMap[bank] && chanMap[bank][enc] != null) ? chanMap[bank][enc] : 1;
+  modalChan.value = String(prevCh);
   // Fill current label
   try {
     const currLabel = (latestState && latestState.banks && latestState.banks[bank] && latestState.banks[bank].encoders && latestState.banks[bank].encoders[enc] && latestState.banks[bank].encoders[enc].label) || '';
@@ -120,17 +124,20 @@ function openAssignModal(enc) {
 
 async function saveAssignModal() {
   const modalInput = $id('cc-input');
+  const modalChan = $id('cc-channel');
   const modalLabel = $id('cc-label');
-  if (!modalInput || !modalLabel) return;
+  if (!modalInput || !modalLabel || !modalChan) return;
   const cc = parseInt(modalInput.value, 10);
   if (!Number.isFinite(cc) || cc < 0 || cc > 127) { return; }
+  const channel = Math.max(1, Math.min(16, parseInt(modalChan.value, 10) || 1));
   const label = String(modalLabel.value || '');
   try {
     // Stage mapping changes in memory only; do not persist until Save/Save As
-    const res = await fetch('/api/mapping/temp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bank: modalCtx.bank, encoder: modalCtx.enc, cc, label }) });
+    const res = await fetch('/api/mapping/temp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bank: modalCtx.bank, encoder: modalCtx.enc, cc, channel, label }) });
     const out = await res.json();
-    if (out && out.mapping) {
-      latestMapping = out.mapping;
+    if (out && (out.mapping || out.channels)) {
+      if (out.mapping) latestMapping = out.mapping;
+      if (out.channels) chanMap = Object.fromEntries(Object.entries(out.channels).map(([b, encs]) => [parseInt(b, 10), Object.fromEntries(Object.entries(encs).map(([e, ch]) => [parseInt(e, 10), parseInt(ch, 10)]))]));
       // Mark dirty locally so Save enables immediately
       isDirty = true;
       if (dirtyFlagEl) dirtyFlagEl.classList.remove('hidden');
@@ -181,6 +188,11 @@ function render(state, mapping = null, dirty = null) {
     } else {
       ccMap = Object.fromEntries(Object.entries(mapping).map(([b, encs]) => [parseInt(b, 10), Object.fromEntries(Object.entries(encs).map(([e, cc]) => [parseInt(e, 10), parseInt(cc, 10)]))]));
     }
+  }
+  // Normalize channels map if provided on the state payload
+  if (state && state.channels) {
+    const chs = state.channels;
+    chanMap = Object.fromEntries(Object.entries(chs).map(([b, encs]) => [parseInt(b, 10), Object.fromEntries(Object.entries(encs).map(([e, ch]) => [parseInt(e, 10), parseInt(ch, 10)]))]));
   }
   // Update active bank button
   bankButtons.forEach((btn) => {
@@ -416,6 +428,9 @@ function connect() {
     try {
       const res = await fetch('/api/state');
       const js = await res.json();
+      if (js && js.channels) {
+        chanMap = Object.fromEntries(Object.entries(js.channels).map(([b, encs]) => [parseInt(b, 10), Object.fromEntries(Object.entries(encs).map(([e, ch]) => [parseInt(e, 10), parseInt(ch, 10)]))]));
+      }
       render(js.state || js, js.mapping, js.dirty);
     } catch {}
     // Keepalive pings from browser side
@@ -437,6 +452,9 @@ function connect() {
     try {
       const msg = JSON.parse(ev.data);
       if (msg.state) {
+        if (msg.channels) {
+          chanMap = Object.fromEntries(Object.entries(msg.channels).map(([b, encs]) => [parseInt(b, 10), Object.fromEntries(Object.entries(encs).map(([e, ch]) => [parseInt(e, 10), parseInt(ch, 10)]))]));
+        }
         render(msg.state, msg.mapping, msg.dirty);
         // If a bank change was broadcast, echo bank-select to MIDI from this client
         if (msg.type === 'bank') {
@@ -587,10 +605,11 @@ function handleWebMidiMessage(e) {
       console.log('[MIDI Learn] Captured CC', { bank, enc, control, channel, value });
       fetch('/api/mapping/temp', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bank, encoder: enc, cc: control })
+        body: JSON.stringify({ bank, encoder: enc, cc: control, channel: (channel + 1) })
       }).then((r) => r.json()).then((out) => {
-        if (out && out.mapping) {
-          latestMapping = out.mapping;
+        if (out && (out.mapping || out.channels)) {
+          if (out.mapping) latestMapping = out.mapping;
+          if (out.channels) chanMap = Object.fromEntries(Object.entries(out.channels).map(([b, encs]) => [parseInt(b, 10), Object.fromEntries(Object.entries(encs).map(([e, ch]) => [parseInt(e, 10), parseInt(ch, 10)]))]));
           isDirty = true;
           if (dirtyFlagEl) dirtyFlagEl.classList.remove('hidden');
           if (presetSaveCurrentBtn) presetSaveCurrentBtn.disabled = false;
