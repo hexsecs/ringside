@@ -54,7 +54,7 @@ body[data-theme="light"] .app-footer small { color: rgba(0,0,0,0.6); }
 body[data-theme="light"] .app-footer a { color: #5b6a8a; }
 body[data-theme="light"] .app-footer a:hover { color: #3f4f70; }
 .live-view, .banks, .encoders-section, .midi-section { grid-column: 1 / -1; }
-.live-view { display: grid; gap: 24px; grid-template-rows: auto auto 1fr; height: 100%; min-height: 0; }
+.live-view { display: grid; grid-template-rows: auto auto 1fr; height: 100%; min-height: 0; }
 .live-view .live-preset-title { grid-row: 1; }
 .live-view .banks { grid-row: 2; }
 .live-view .encoders-section { grid-row: 3; }
