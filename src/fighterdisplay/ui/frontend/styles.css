@@ -123,6 +123,8 @@ body[data-bank-pos="below"] #live-view:fullscreen .banks { grid-row: 3; }
   font-weight: 800;
   letter-spacing: 0.5px;
   color: #ffffff;
+  /* Add top margin to avoid overlap with top-left brand on small screens */
+  margin-top: clamp(16px, 6vw, 64px);
 }
 #live-view .live-preset-title { display: none; }
 #live-view:fullscreen .bank.bank-large {
@@ -326,8 +328,8 @@ body[data-theme="light"] #live-view:fullscreen .bank-large button.active { backg
   z-index: 10000;
   pointer-events: none;
   opacity: 1;
-  /* Match preset title scale */
-  font-size: clamp(32px, 8vw, 64px);
+  /* Scale smaller than center title to prevent visual overlap */
+  font-size: clamp(16px, 3vw, 28px);
 }
 .fs-brand-logo { height: 1.2em; width: auto; display: block; }
 .fs-brand-title { font-size: 1em; font-weight: 700; color: rgba(255,255,255,0.7); letter-spacing: 0.2px; }
