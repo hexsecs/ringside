@@ -108,23 +108,27 @@ body.show-midi .live-view { grid-row: 2; }
   display: grid;
   gap: 24px;
   height: 100vh;
-  grid-template-rows: auto auto 1fr; /* Title, Banks, then Encoders fill remainder */
+  position: relative; /* anchor absolute logo */
+  /* Reserve a fixed-height title row so the logo can align vertically without overlap */
+  grid-template-rows: clamp(56px, 10vw, 112px) auto 1fr; /* Title row, Banks, then Encoders fill remainder */
 }
 #live-view:fullscreen .live-preset-title { grid-row: 1; }
 #live-view:fullscreen .banks { grid-row: 2; }
 #live-view:fullscreen .encoders-section { grid-row: 3; }
-body[data-bank-pos="below"] #live-view:fullscreen { grid-template-rows: auto 1fr auto; }
+body[data-bank-pos="below"] #live-view:fullscreen { grid-template-rows: clamp(56px, 10vw, 112px) 1fr auto; }
 body[data-bank-pos="below"] #live-view:fullscreen .encoders-section { grid-row: 2; }
 body[data-bank-pos="below"] #live-view:fullscreen .banks { grid-row: 3; }
+/* Show centered preset title in fullscreen; reserve space on right for logo */
 #live-view:fullscreen .live-preset-title {
   display: block;
   text-align: center;
-  font-size: clamp(32px, 8vw, 64px);
+  font-size: clamp(28px, 6vw, 56px);
   font-weight: 800;
   letter-spacing: 0.5px;
   color: #ffffff;
-  /* Add top margin to avoid overlap with top-left brand on small screens */
-  margin-top: clamp(16px, 6vw, 64px);
+  /* Keep perfectly centered while reserving space for the logo area */
+  width: calc(100% - clamp(72px, 10vw, 160px));
+  margin: 0 auto;
 }
 #live-view .live-preset-title { display: none; }
 #live-view:fullscreen .bank.bank-large {
@@ -175,6 +179,11 @@ body[data-bank-pos="below"] #live-view:fullscreen .banks { grid-row: 3; }
 /* Improve contrast in fullscreen live view on dark backgrounds */
 #live-view:fullscreen { color: #e8eefc; }
 #live-view:fullscreen h2 { color: #e8eefc; }
+#live-view:fullscreen .banks h2,
+#live-view:fullscreen .encoders-section h2 {
+  font-size: clamp(18px, 3.2vw, 28px);
+  line-height: 1.15;
+}
 #live-view:fullscreen .cell { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.24); }
 #live-view:fullscreen .label, #live-view:fullscreen .value { color: #e8eefc; }
 #live-view:fullscreen .bar { background: rgba(255, 255, 255, 0.1); }
@@ -322,19 +331,20 @@ body[data-theme="light"] #live-view:fullscreen .bank-large button.active { backg
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  position: fixed;
-  top: 10px;
-  left: 12px;
-  z-index: 10000;
+  position: absolute;
+  top: 0;
+  right: 16px;
+  height: clamp(56px, 10vw, 112px); /* match title row height */
+  z-index: 10;
   pointer-events: none;
-  opacity: 1;
-  /* Scale smaller than center title to prevent visual overlap */
-  font-size: clamp(16px, 3vw, 28px);
 }
+.fs-brand-logo { height: auto; }
+#live-view:fullscreen .fs-brand-logo { height: 100%; width: auto; display: block; }
+#live-view:fullscreen .fs-brand-title { display: none; }
 .fs-brand-logo { height: 1.2em; width: auto; display: block; }
 .fs-brand-title { font-size: 1em; font-weight: 700; color: rgba(255,255,255,0.7); letter-spacing: 0.2px; }
 @media (max-width: 600px) {
-  #live-view:fullscreen .fs-brand { top: 8px; left: 10px; gap: 8px; }
+  #live-view:fullscreen .fs-brand { gap: 8px; }
 }
 /* Light theme color for brand title */
 body[data-theme="light"] .fs-brand-title { color: rgba(0,0,0,0.6); }
